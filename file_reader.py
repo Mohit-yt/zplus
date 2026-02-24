@@ -1,0 +1,89 @@
+import csv
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = BASE_DIR / "data"
+
+
+def _ensure_data_dir() -> Path:
+    if not DATA_DIR.exists():
+        logger.warning("Data directory %s does not exist", DATA_DIR)
+    return DATA_DIR
+
+
+def read_market_prices() -> List[Dict[str, Any]]:
+    data_dir = _ensure_data_dir()
+    path = data_dir / "market_prices.csv"
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    rows: List[Dict[str, Any]] = []
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                row["price"] = float(row["price"])
+            except (TypeError, ValueError, KeyError):
+                logger.warning("Invalid price value in row: %s", row)
+                continue
+            rows.append(
+                {
+                    "crop": row.get("crop") or row.get("Crop") or "",
+                    "market": row.get("market") or row.get("Market") or "",
+                    "price": row["price"],
+                }
+            )
+    return rows
+
+
+def _read_json_list(filename: str) -> List[Dict[str, Any]]:
+    data_dir = _ensure_data_dir()
+    path = data_dir / filename
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, dict):
+        return [data]
+    if isinstance(data, list):
+        return data
+
+    raise ValueError(f"Unexpected JSON structure in {filename}")
+
+
+def read_profit_output() -> List[Dict[str, Any]]:
+    records = _read_json_list("profit_output.json")
+    for record in records:
+        if "harvest_id" in record:
+            record["harvest_id"] = int(record["harvest_id"])
+        if "net_profit" in record:
+            record["net_profit"] = float(record["net_profit"])
+    return records
+
+
+def read_best_market() -> List[Dict[str, Any]]:
+    records = _read_json_list("best_market.json")
+    for record in records:
+        if "harvest_id" in record:
+            record["harvest_id"] = int(record["harvest_id"])
+        if "max_profit" in record:
+            record["max_profit"] = float(record["max_profit"])
+    return records
+
+
+def read_risk_output() -> List[Dict[str, Any]]:
+    records = _read_json_list("risk_output.json")
+    for record in records:
+        if "harvest_id" in record:
+            record["harvest_id"] = int(record["harvest_id"])
+        if "risk_score" in record:
+            record["risk_score"] = int(record["risk_score"])
+    return records
